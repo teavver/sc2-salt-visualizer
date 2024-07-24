@@ -1,3 +1,4 @@
-import * as fmt from "./formatter"
+import * as p from "./parser"
 
-fmt.format_classic_bo("sample.bo")
+// p.parse_classic_bo("classic.bo")
+p.parse_salt_bo("salt.bo")
