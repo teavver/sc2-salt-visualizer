@@ -3,15 +3,25 @@
   "version": "1.0.0",
   "repository": "https://github.com/teavver/sc2-bo",
   "author": "teavver <jerzyx11@gmail.com>",
+  "type": "module",
   "license": "MIT",
   "scripts": {
     "build": "tsc",
-    "main": "yarn build && node dist/main.js"
+    "web": "vite --port 7343 --open --base './src'"
   },
   "dependencies": {
-    "@types/node": "^20.0.0"
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0-dev.20240724"
+    "typescript": "^5.5.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.2.66",
+    "@types/react-dom": "^18.2.22",
+    "@vitejs/plugin-react-swc": "^3.5.0",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "vite": "^5.2.0"
   }
 }
