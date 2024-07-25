@@ -1,4 +1,4 @@
-import { FailureData, Step, StepActionBase } from "./parser.js"
+import { FailureData, Step, StepActionBase } from "./types.js"
 import { format_err } from "./utils.js"
 
 export interface SALT_Metadata {

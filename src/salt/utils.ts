@@ -1,18 +1,32 @@
-import { StepAction, StepActionBase } from "./parser.js"
+import { StepAction, StepActionBase } from "./types.js"
 
 // === General ===
 
 export const to_decimal = (str: string) => parseInt(str, 10)
 
+export const jstr = (json: object) => JSON.stringify(json, null, 4)
+
 export const format_err = (err: unknown) => {
     console.log("======")
     if (err instanceof Error) {
-        console.log(err.name, err.message)
-        err.stack && console.log(err.stack)
+        console.error(err.name, err.message)
+        err.stack && console.error(err.stack)
     } else {
-        console.log(err)
+        console.error(err)
     }
     console.log("======")
+}
+
+export const create_logger = (module: string) => {
+    return (msg: string, special?: "warn" | "error") => {
+        if (!special) {
+            console.log(`[${module}]: ${msg}`)
+        } else if (special === "warn") {
+            console.warn(`[${module}]: ${msg}`)
+        } else if (special === "error") {
+            console.error(`[${module}]: ${msg}`)
+        }
+    }
 }
 
 // === Classic BO ===
@@ -24,7 +38,7 @@ export const format_err = (err: unknown) => {
 export const extract_actions = (action_str: string): StepAction => {
     let res: StepAction = { actions: [] }
     if (action_str === "") {
-        res.failed = { type: "error", reason: "Empty action string" }
+        res.fails = { type: "error", reason: "Empty action string" }
         return res
     }
     // Catch all "xN" expressions, e.g. " x6", " x1"
@@ -33,6 +47,9 @@ export const extract_actions = (action_str: string): StepAction => {
     const actions = action_str.split(",")
     actions.forEach((action: string) => {
         let base_action: StepActionBase = { action: "", count: 1 }
+        if (action.length === 0) {
+            res.fails = { type: "warning", reason: "Action is empty. Did you missclick a comma?" }
+        }
         // Handle count, e.g. "Zergling x4"
         const matches = action.match(repeat_count_expr)
         // console.log(matches)
@@ -45,5 +62,6 @@ export const extract_actions = (action_str: string): StepAction => {
         }
         res.actions.push(base_action)
     })
+    // console.log(`[res]: ${JSON.stringify(res, null, 4)}`) // DEBUG
     return res
 }
