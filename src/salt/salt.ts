@@ -1,17 +1,35 @@
-import { FailureData } from "./parser"
+import { FailureData, Step, StepActionBase } from "./parser.js"
+import { format_err } from "./utils.js"
 
 export interface SALT_Metadata {
     version: number
 }
 
-export class SALT {
+const enum SALT_Chunk {
+    SUPPLY = 0,
+    MINUTES,
+    SECONDS,
+    TYPE,
+    ITEM_ID,
+}
 
-    constructor() { }
+const enum SALT_Action_Type {
+    STRUCTURE = 0,
+    UNIT,
+    MORPH,
+    UPGRADE
+}
+
+export class SALT {
 
     // Version is always the first character of any SALT string
     private readonly VERSION_CHAR_IDX: number = 0
     // End of title section is always denoted with a "~" character
     private readonly SECTION_DELIMITER: string = "~"
+    // Supply amount is shifted to the left by (4)
+    private readonly SUPPLY_SHIFT: number = 4
+    // [Supply][Minutes][Seconds][Type][Item Id]
+    private readonly CHUNK_LENGTH: number = 5
 
     private readonly symbol_map = new Map([
         [" ", 0], ["!", 1], ["\"", 2], ["#", 3], ["$", 4],
@@ -33,13 +51,6 @@ export class SALT {
         ["p", 80], ["q", 81], ["r", 82], ["s", 83], ["t", 84],
         ["u", 85], ["v", 86], ["w", 87], ["x", 88], ["y", 89],
         ["z", 90], ["{", 91], ["|", 92], ["}", 93], ["~", 94]
-    ])
-
-    private readonly action_type = new Map([
-        ["0", "STRUCTURE"],
-        ["1", "UNIT"],
-        ["2", "MORPH"],
-        ["3", "UPGRADE"],
     ])
 
     private readonly structures = new Map([
@@ -138,22 +149,95 @@ export class SALT {
         ["67", "Anion Pulse-Crystals"]
     ])
 
+    private readonly get_symbol_val = (key: string): number => {
+        // TODO: Pass local failure array here to populate
+        const val = this.symbol_map.get(key)
+        if (!val) return 0 // POpulate
+        return val
+    }
+
+    private readonly valid_bo_input = (bo: string): boolean => bo.length > 1
+
+    private readonly find_type_group = (type: number): Map<string, string> | null => {
+        switch (type) {
+            case SALT_Action_Type.STRUCTURE:
+                return this.structures
+            case SALT_Action_Type.UNIT:
+                return this.units
+            case SALT_Action_Type.MORPH:
+                return this.morphs
+            case SALT_Action_Type.UPGRADE:
+                return this.upgrades
+            default:
+                return null
+        }
+    }
+
+    private readonly resolve_type_item_id = (type: number, item_id: number): StepActionBase | FailureData => {
+        const type_group_map = this.find_type_group(type)
+        if (!type_group_map) {
+            return { type: "error", reason: "(Resolve) Failed to find action type group" }
+        }
+        const action = type_group_map.get(item_id.toString())
+        if (!action) {
+            return { type: "warning", reason: "(Resolve) No action found with this item_id" }
+        }
+        return { action, count: 1 }
+    }
+
     public get_bo_version = (bo: string): number | FailureData => {
-        if (bo.length < 1) return { type: "error", reason: "Empty BO" }
-        return this.symbol_map.get(bo.charAt(this.VERSION_CHAR_IDX))
+        if (!this.valid_bo_input(bo)) return { type: "error", reason: "Empty BO" }
+        const val = this.symbol_map.get(bo.charAt(this.VERSION_CHAR_IDX))
+        if (!val) return { type: "error", reason: "Failed to get version" }
+        return val
     }
 
     public get_bo_title = (bo: string): string | FailureData => {
-        if (bo.length < 1) return { type: "error", reason: "Empty BO" }
+        if (!this.valid_bo_input(bo)) return { type: "error", reason: "Empty BO" }
         const title_end_idx = bo.indexOf(this.SECTION_DELIMITER)
         return bo.substring(this.VERSION_CHAR_IDX + 1, title_end_idx)
     }
 
     public get_bo_content = (bo: string): string | FailureData => {
-        if (bo.length < 1) return { type: "error", reason: "Empty BO" }
+        if (!this.valid_bo_input(bo)) return { type: "error", reason: "Empty BO" }
         const title_end_idx = bo.indexOf(this.SECTION_DELIMITER)
         const content = String.raw`${bo.substring(title_end_idx + 1, bo.length)}`
         return content
+    }
+
+    // Split SALT BO content into 5-char chunk array
+    public get_bo_chunks = (bo: string): Array<string> | FailureData => {
+        try {
+            if (bo.length < this.CHUNK_LENGTH || bo.length % this.CHUNK_LENGTH !== 0) {
+                return { type: "warning", reason: "SALT Chunk is incomplete or corrupted" }
+            }
+            const res: Array<string> = []
+            for (let i = 0; i < bo.length; i += this.CHUNK_LENGTH) {
+                res.push(bo.slice(i, i + this.CHUNK_LENGTH))
+            }
+            return res
+        } catch (err) {
+            format_err(err)
+            return { type: "error", reason: "Unknwon error occurred. Check the console" }
+        }
+    }
+
+    public decode_chunk = (chunk: string): Step | FailureData => {
+        if (!this.valid_bo_input(chunk)) return { type: "error", reason: "Empty BO" }
+        if (chunk.length < this.CHUNK_LENGTH) return { type: "error", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` }
+        const supply_val = this.get_symbol_val(chunk.charAt(SALT_Chunk.SUPPLY))
+        const minutes = this.get_symbol_val(chunk.charAt(SALT_Chunk.MINUTES))
+        const seconds = this.get_symbol_val(chunk.charAt(SALT_Chunk.SECONDS))
+        const action_type = this.get_symbol_val(chunk.charAt(SALT_Chunk.TYPE))
+        const action_item_id = this.get_symbol_val(chunk.charAt(SALT_Chunk.ITEM_ID))
+        const action = this.resolve_type_item_id(action_type, action_item_id)
+        if ("reason" in action) { return { type: action.type, reason: action.reason } }
+        return {
+            supply: supply_val + this.SUPPLY_SHIFT,
+            minutes,
+            seconds,
+            actions: [action]
+        }
     }
 
 }

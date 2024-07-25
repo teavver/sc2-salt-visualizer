@@ -1,14 +1,17 @@
-import { StepAction, StepActionBase } from "./parser"
+import { StepAction, StepActionBase } from "./parser.js"
 
 // === General ===
 
 export const to_decimal = (str: string) => parseInt(str, 10)
 
-export const format_err = (err_str: string) => {
-    const err = err_str as unknown as Error
+export const format_err = (err: unknown) => {
     console.log("======")
-    console.log(err.name, err.message)
-    err.stack && console.log(err.stack)
+    if (err instanceof Error) {
+        console.log(err.name, err.message)
+        err.stack && console.log(err.stack)
+    } else {
+        console.log(err)
+    }
     console.log("======")
 }
 
@@ -28,14 +31,12 @@ export const extract_actions = (action_str: string): StepAction => {
     // All count expressions must be preceded with a whitespace
     const repeat_count_expr = /\bx(\d+)\b/
     const actions = action_str.split(",")
-    console.log("actions ", actions)
     actions.forEach((action: string) => {
-        console.log('action ', action)
         let base_action: StepActionBase = { action: "", count: 1 }
         // Handle count, e.g. "Zergling x4"
         const matches = action.match(repeat_count_expr)
-        console.log(matches)
-        if (!matches) {
+        // console.log(matches)
+        if (!matches || !matches.index) {
             base_action.action = action
         } else {
             base_action.count = to_decimal(matches[1])

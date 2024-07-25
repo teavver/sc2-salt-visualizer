@@ -1,6 +1,6 @@
 import * as fs from "fs"
-import { extract_actions, format_err, to_decimal } from "./utils"
-import { SALT } from "./salt"
+import { extract_actions, format_err, to_decimal } from "./utils.js"
+import { SALT } from "./salt.js"
 
 export type Filepath = string
 
@@ -17,14 +17,14 @@ export interface StepActionBase {
 export interface StepAction {
     actions: StepActionBase[]
     comment?: string
-    failed?: FailureData
+    failed?: FailureData | FailureData[]
 }
 
 export interface StepBase {
     supply: number
     minutes: number
     seconds: number
-    failed?: FailureData
+    failed?: FailureData | FailureData[]
 }
 
 export interface Step extends StepBase, StepAction { }
@@ -81,10 +81,21 @@ export const parse_salt_bo = (fpath: Filepath) => {
         console.log(`title "${title}"`)
         console.log(`bo "${bo}"`)
 
+        const chunks = salt.get_bo_chunks(bo as string)
+        if ("reason" in chunks) {
+            return format_err(chunks.reason)
+        } else {
+            chunks.forEach((chunk: string, idx: number) => {
+                console.log(JSON.stringify(salt.decode_chunk(chunk), null, 4))
+            })
+        }
     } catch (err) {
         format_err(err)
     }
 }
+
+// parse_salt_bo("salt.bo")
+parse_classic_bo("classic.bo")
 
 
 
