@@ -1,4 +1,4 @@
-import { FailureData, Step, StepActionBase } from "./types.js"
+import { FailureData, Mapping, Step, StepActionBase } from "./types.js"
 import { format_err } from "./utils.js"
 
 export interface SALT_Metadata {
@@ -173,6 +173,10 @@ export class SALT {
         }
     }
 
+    private readonly get_char_mapping = (char_idx: SALT_Chunk): Mapping => {
+        return { start: char_idx, end: char_idx }
+    }
+
     private readonly resolve_type_item_id = (type: number, item_id: number): StepActionBase | FailureData => {
         const type_group_map = this.find_type_group(type)
         if (!type_group_map) {
@@ -222,21 +226,22 @@ export class SALT {
         }
     }
 
-    public decode_chunk = (chunk: string): Step | FailureData => {
-        if (!this.valid_bo_input(chunk)) return { type: "error", reason: "Empty BO" }
-        if (chunk.length < this.CHUNK_LENGTH) return { type: "error", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` }
+    public decode_chunk = (chunk: string): Step => {
+        let err: FailureData | undefined = undefined
+        if (!this.valid_bo_input(chunk)) err = { type: "error", reason: "Empty BO" }
+        if (chunk.length < this.CHUNK_LENGTH) err = { type: "error", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` }
         const supply_val = this.get_symbol_val(chunk.charAt(SALT_Chunk.SUPPLY))
         const minutes = this.get_symbol_val(chunk.charAt(SALT_Chunk.MINUTES))
         const seconds = this.get_symbol_val(chunk.charAt(SALT_Chunk.SECONDS))
         const action_type = this.get_symbol_val(chunk.charAt(SALT_Chunk.TYPE))
         const action_item_id = this.get_symbol_val(chunk.charAt(SALT_Chunk.ITEM_ID))
         const action = this.resolve_type_item_id(action_type, action_item_id)
-        if ("reason" in action) { return { type: action.type, reason: action.reason } }
+        if ("reason" in action) err = { type: action.type, reason: action.reason }
         return {
-            supply: supply_val + this.SUPPLY_SHIFT,
-            minutes,
-            seconds,
-            actions: [action]
+            supply: { value: supply_val + this.SUPPLY_SHIFT, mapping: this.get_char_mapping(SALT_Chunk.SUPPLY) },
+            minutes: { value: minutes, mapping: this.get_char_mapping(SALT_Chunk.MINUTES) },
+            seconds: { value: seconds, mapping: this.get_char_mapping(SALT_Chunk.SECONDS) },
+            actions: ("reason" in action) ? [] : [action],
         }
     }
 

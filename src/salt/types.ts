@@ -1,6 +1,16 @@
 
 export type Filepath = string
 
+export interface Mapping {
+    start: number
+    end: number
+}
+
+export interface MappableValue<T> {
+    value: T
+    mapping: Mapping
+}
+
 export interface FailureData {
     type: "warning" | "error",
     reason: string
@@ -18,10 +28,11 @@ export interface StepAction {
 }
 
 export interface StepBase {
-    supply: number
-    minutes: number
-    seconds: number
+    supply: MappableValue<number>
+    minutes: MappableValue<number>
+    seconds: MappableValue<number>
     fails?: FailureData | FailureData[]
 }
 
-export interface Step extends StepBase, StepAction { }
+export interface Step extends StepBase, StepAction {
+}

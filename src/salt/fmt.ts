@@ -6,7 +6,7 @@ const log = create_logger("fmt")
 
 /**
  */
-export const format_classic_bo = (bo_raw: string): string[] | FailureData => {
+export const format_classic_bo = (bo_raw: string): Array<string[]> | FailureData => {
     try {
         log(`bo_raw: '${bo_raw}'`)
         const regex = /(\d+ [\d:]+ [^0-9:]+)/g
@@ -15,7 +15,7 @@ export const format_classic_bo = (bo_raw: string): string[] | FailureData => {
         if (lines.length === 0) {
             return { type: "warning", reason: "Couldn't format build order." }
         }
-        return lines
+        return lines.map((line: string) => line.split(" "))
     } catch (err) {
         format_err(err)
         return { type: "error", reason: "Failed to format build order. Is your format correct? " }

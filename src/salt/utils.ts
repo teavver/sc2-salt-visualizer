@@ -1,10 +1,17 @@
-import { StepAction, StepActionBase } from "./types.js"
+import { FailureData, MappableValue, Mapping, StepAction, StepActionBase } from "./types.js"
 
 // === General ===
 
 export const to_decimal = (str: string) => parseInt(str, 10)
 
 export const jstr = (json: object) => JSON.stringify(json, null, 4)
+
+export const is_err = (data: unknown) => {
+    const obj = data as object
+    return ("reason" in obj)
+}
+
+export const halt_unexpected_err = (err: unknown): FailureData => { return { type: "error", reason: `Unexpected error occurred. Err: ${(err as Error).message}` } }
 
 export const format_err = (err: unknown) => {
     console.log("======")
@@ -29,7 +36,7 @@ export const create_logger = (module: string) => {
     }
 }
 
-// === Classic BO ===
+// === Parser utils ===
 
 /**
  * Extracts actions from an action string
@@ -64,4 +71,8 @@ export const extract_actions = (action_str: string): StepAction => {
     })
     // console.log(`[res]: ${JSON.stringify(res, null, 4)}`) // DEBUG
     return res
+}
+
+export const extract_and_map = (source: string, start_idx: number, end_idx: number): [string, Mapping] => {
+    return [source.substring(start_idx, end_idx), { start: start_idx, end: end_idx }]
 }
