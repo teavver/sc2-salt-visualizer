@@ -1,11 +1,11 @@
-import { FailureData, Mapping, Step, StepActionBase } from "./types.js"
-import { format_err } from "./utils.js"
+import { BuildOrderBlock, BuildOrderBlockId, FailureData, MappedValue, Step, StepActionBase } from "./types.js"
+import { find_map_value, format_err, gen_map_id, salt_symbol_from_val } from "./utils.js"
 
-export interface SALT_Metadata {
+export interface SaltMetadata {
     version: number
 }
 
-const enum SALT_Chunk {
+enum SaltCharType {
     SUPPLY = 0,
     MINUTES,
     SECONDS,
@@ -13,14 +13,14 @@ const enum SALT_Chunk {
     ITEM_ID,
 }
 
-const enum SALT_Action_Type {
+const enum SaltActionType {
     STRUCTURE = 0,
     UNIT,
     MORPH,
     UPGRADE
 }
 
-export class SALT {
+export class Salt {
 
     // Version is always the first character of any SALT string
     private readonly VERSION_CHAR_IDX: number = 0
@@ -30,6 +30,7 @@ export class SALT {
     private readonly SUPPLY_SHIFT: number = 4
     // [Supply][Minutes][Seconds][Type][Item Id]
     private readonly CHUNK_LENGTH: number = 5
+    private readonly ERR_CHAR: string = "❗"
 
     private readonly symbol_map = new Map([
         [" ", 0], ["!", 1], ["\"", 2], ["#", 3], ["$", 4],
@@ -134,7 +135,7 @@ export class SALT {
         ["34", "Overlord - Pneumatized Carapace"], ["35", "Overlord - Ventral Sacs"],
         ["36", "Roach - Glial Reconstitution"], ["38", "Roach - Tunneling Claws"],
         ["40", "Ultralisk - Chitinous Plating"], ["41", "Zergling - Adrenal Glands"],
-        ["42", "Zergling - Metabolic Boost"], ["44", "Burrow"],
+        ["42", "Metabolic Boost"], ["44", "Burrow"],
         ["45", "Centrifugal Hooks"], ["46", "Ghost - Moebius Reactor"],
         ["47", "Extended Thermal Lance"], ["48", "(REMOVED FROM GAME) Khaydarin Amulet"],
         ["49", "Neural Parasite"], ["50", "Pathogen Gland"],
@@ -149,6 +150,13 @@ export class SALT {
         ["67", "Anion Pulse-Crystals"]
     ])
 
+    private readonly action_type_map = new Map([
+        [SaltActionType.STRUCTURE, this.structures],
+        [SaltActionType.UNIT, this.units],
+        [SaltActionType.MORPH, this.morphs],
+        [SaltActionType.UPGRADE, this.upgrades],
+    ])
+
     private readonly get_symbol_val = (key: string): number => {
         // TODO: Pass local failure array here to populate
         const val = this.symbol_map.get(key)
@@ -158,35 +166,56 @@ export class SALT {
 
     private readonly valid_bo_input = (bo: string): boolean => bo.length > 1
 
-    private readonly find_type_group = (type: number): Map<string, string> | null => {
-        switch (type) {
-            case SALT_Action_Type.STRUCTURE:
-                return this.structures
-            case SALT_Action_Type.UNIT:
-                return this.units
-            case SALT_Action_Type.MORPH:
-                return this.morphs
-            case SALT_Action_Type.UPGRADE:
-                return this.upgrades
-            default:
-                return null
-        }
-    }
+    // private readonly get_char_mapping = (char_idx: SaltCharType): Mapping => {
+    //     return { id: 99, start: char_idx, end: char_idx }
+    // }
 
-    private readonly get_char_mapping = (char_idx: SALT_Chunk): Mapping => {
-        return { start: char_idx, end: char_idx }
-    }
-
-    private readonly resolve_type_item_id = (type: number, item_id: number): StepActionBase | FailureData => {
-        const type_group_map = this.find_type_group(type)
+    private readonly resolve_type_item_id = (type: number, item_id: number, l_idx: number, v5: boolean = false): MappedValue<StepActionBase> | FailureData => {
+        const type_group_map = this.action_type_map.get(type)
         if (!type_group_map) {
             return { type: "error", reason: "(Resolve) Failed to find action type group" }
         }
-        const action = type_group_map.get(item_id.toString())
+        const action = type_group_map.get(String(item_id))
         if (!action) {
             return { type: "warning", reason: "(Resolve) No action found with this item_id" }
         }
-        return { action, count: 1 }
+        return { map_id: gen_map_id(l_idx, BuildOrderBlockId.ACTION), value: { action: action, count: 1 } }
+    }
+
+    public gen_salt_from_json = (steps: Step[]): BuildOrderBlock[] => {
+        const res: BuildOrderBlock[] = [
+            { id: "", content: "!" },
+            { id: "", content: "<title>" },
+            { id: "", content: this.SECTION_DELIMITER },
+        ]
+        steps.forEach((step: Step, l_idx: number) => {
+            // step.actions.forEach() <--- becauise SALT does not support 'count'
+            const g_map = (l_idx: number, idx: number) => `${l_idx}${idx}`
+            const supply = salt_symbol_from_val(this.symbol_map, step.supply.value - this.SUPPLY_SHIFT)?.[0] || this.ERR_CHAR
+            const minutes = salt_symbol_from_val(this.symbol_map, step.minutes.value)?.[0] || this.ERR_CHAR
+            const seconds = salt_symbol_from_val(this.symbol_map, step.seconds.value)?.[0] || this.ERR_CHAR
+            // Backtrack from Item id -> Action type -> Values
+            let action_type: string = this.ERR_CHAR
+            let item_id: string = this.ERR_CHAR
+            const categories = [this.structures, this.units, this.morphs, this.upgrades]
+            categories.forEach((category, idx) => {
+                const res = salt_symbol_from_val(category, step.actions[0].value.action)
+                if (res) {
+                    item_id = salt_symbol_from_val(this.symbol_map, +res[0])?.[0] || this.ERR_CHAR
+                    action_type = salt_symbol_from_val(this.symbol_map, idx)?.[0] || this.ERR_CHAR
+                }
+            })
+
+            res.push(
+                { id: g_map(l_idx, SaltCharType.SUPPLY), content: supply },
+                { id: g_map(l_idx, SaltCharType.MINUTES), content: minutes },
+                { id: g_map(l_idx, SaltCharType.SECONDS), content: seconds },
+                { id: g_map(l_idx, SaltCharType.TYPE), content: action_type },
+                { id: g_map(l_idx, SaltCharType.TYPE), content: item_id },
+            )
+
+        })
+        return res
     }
 
     public get_bo_version = (bo: string): number | FailureData => {
@@ -226,21 +255,22 @@ export class SALT {
         }
     }
 
-    public decode_chunk = (chunk: string): Step => {
+    // SALT v1-v4
+    public decode_chunk = (chunk: string, l_idx: number): Step => {
         let err: FailureData | undefined = undefined
         if (!this.valid_bo_input(chunk)) err = { type: "error", reason: "Empty BO" }
         if (chunk.length < this.CHUNK_LENGTH) err = { type: "error", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` }
-        const supply_val = this.get_symbol_val(chunk.charAt(SALT_Chunk.SUPPLY))
-        const minutes = this.get_symbol_val(chunk.charAt(SALT_Chunk.MINUTES))
-        const seconds = this.get_symbol_val(chunk.charAt(SALT_Chunk.SECONDS))
-        const action_type = this.get_symbol_val(chunk.charAt(SALT_Chunk.TYPE))
-        const action_item_id = this.get_symbol_val(chunk.charAt(SALT_Chunk.ITEM_ID))
-        const action = this.resolve_type_item_id(action_type, action_item_id)
+        const [supply, minutes, seconds, type, item_id] = Object.keys(SaltCharType).map((_, idx) => this.get_symbol_val(chunk.charAt(idx)))
+        // const minutes = this.get_symbol_val(chunk.charAt(SaltCharType.MINUTES))
+        // const seconds = this.get_symbol_val(chunk.charAt(SaltCharType.SECONDS))
+        // const action_type = this.get_symbol_val(chunk.charAt(SaltCharType.TYPE))
+        // const action_item_id = this.get_symbol_val(chunk.charAt(SaltCharType.ITEM_ID))
+        const action = this.resolve_type_item_id(type, item_id, l_idx)
         if ("reason" in action) err = { type: action.type, reason: action.reason }
         return {
-            supply: { value: supply_val + this.SUPPLY_SHIFT, mapping: this.get_char_mapping(SALT_Chunk.SUPPLY) },
-            minutes: { value: minutes, mapping: this.get_char_mapping(SALT_Chunk.MINUTES) },
-            seconds: { value: seconds, mapping: this.get_char_mapping(SALT_Chunk.SECONDS) },
+            supply: { map_id: gen_map_id(l_idx, BuildOrderBlockId.SUPPLY), value: supply + this.SUPPLY_SHIFT },
+            minutes: { map_id: gen_map_id(l_idx, BuildOrderBlockId.MINUTES), value: minutes },
+            seconds: { map_id: gen_map_id(l_idx, BuildOrderBlockId.MINUTES), value: seconds },
             actions: ("reason" in action) ? [] : [action],
         }
     }

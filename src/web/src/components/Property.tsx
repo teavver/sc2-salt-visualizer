@@ -1,6 +1,7 @@
 import { Flex } from "@chakra-ui/react";
 
 interface PropertyProps {
+    id: string
     name: string
     value: string
     bracket?: "left" | "right"
@@ -16,23 +17,26 @@ export const propertyIdMap = new Map([
 
 export const propertyColorMap = new Map([
     ["supply", "rgba(93, 163, 112, 0.33)"],
-    ["minutes", "rgba(22, 255, 255, 0.33)"],
+    ["minutes", "rgba(140, 166, 207, 0.33)"],
     ["seconds", "rgba(103, 146, 207, 0.33)"],
     ["action", "rgba(154, 109, 163, 0.33)"],
     ["count", "rgba(117, 117, 117, 0.33)"],
 ])
 
-export const Property = ({ name, value, bracket }: PropertyProps) => {
+export const Property = ({ id, name, value, bracket }: PropertyProps) => {
     return (
         <Flex
-            fontFamily={"monospace"} whiteSpace={"pre-line"}
-            p={1} flexWrap={false} direction={"row"}
+            fontFamily={"monospace"} flexWrap={false}
+            direction={"row"} borderRadius={2}
             backgroundColor={propertyColorMap.get(name)}
+            className="cursor-default"
         >
             {bracket ?
-                <p>{bracket === "left" ? "{" : "}"}</p>
+                <span className="p-1">{bracket === "left" ? "{" : "}"}</span>
                 :
-                <p>"{name}":&nbsp;{value}</p>
+                <span id={id} className="p-1 whitespace-nowrap">"{name}":
+                    <span id={id} className="font-bold">{" "}{value}</span>
+                </span>
             }
         </Flex>
     )

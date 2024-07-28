@@ -1,14 +1,9 @@
 
-export type Filepath = string
+export type MappingId = string
 
-export interface Mapping {
-    start: number
-    end: number
-}
-
-export interface MappableValue<T> {
+export interface MappedValue<T> {
     value: T
-    mapping: Mapping
+    map_id: MappingId
 }
 
 export interface FailureData {
@@ -22,17 +17,29 @@ export interface StepActionBase {
 }
 
 export interface StepAction {
-    actions: StepActionBase[]
+    actions: MappedValue<StepActionBase>[]
     comment?: string
     fails?: FailureData | FailureData[]
 }
 
 export interface StepBase {
-    supply: MappableValue<number>
-    minutes: MappableValue<number>
-    seconds: MappableValue<number>
+    supply: MappedValue<number>
+    minutes: MappedValue<number>
+    seconds: MappedValue<number>
     fails?: FailureData | FailureData[]
 }
 
 export interface Step extends StepBase, StepAction {
+}
+
+export interface BuildOrderBlock {
+    id: MappingId
+    content: string
+}
+
+export enum BuildOrderBlockId {
+    SUPPLY = 0,
+    MINUTES,
+    SECONDS,
+    ACTION,
 }

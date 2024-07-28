@@ -1,6 +1,7 @@
 import * as parser from "../../salt/parser";
 import * as fmt from "../../salt/fmt";
 import { is_err } from "../../salt/utils";
+import { Mappings } from "./components/Mappings";
 import { useState, useEffect, Fragment } from 'react';
 import {
     Box,
@@ -24,6 +25,7 @@ import {
     InputGroup,
     InputRightElement,
     List,
+    Divider,
     UnorderedList,
     ListItem,
     Badge,
@@ -31,150 +33,171 @@ import {
     Select,
     Switch
 } from '@chakra-ui/react';
-import { FailureData, Step, StepActionBase } from "../../salt/types";
+import { FailureData, MappedValue, Step, StepActionBase, BuildOrderBlock } from "../../salt/types";
 import { create_logger, jstr } from "../../salt/utils";
 import { InfoCard } from "./components/FailCard";
 import { Property, propertyColorMap, propertyIdMap } from "./components/Property";
+import { ClassicBO } from "./components/ClassicBO";
+import { gen_classic_from_json } from "../../salt/classic";
+import { isElementVisible } from "./utils/utils";
+import { Salt } from "../../salt/salt";
+import { SaltBO } from "./components/SaltBO";
+import { sampleClassic, sampleSalt } from "./utils/samples";
 
+// Yes, I do prefer this over a boolean.
+export type ConversionMode = "CL->SALT" | "SALT->CL"
 
 interface InputData {
     userInput: string
-    formatted: Array<string[]>
-    needsFormat: boolean
     fail?: FailureData
 }
 
 // Contains both JSON-generated BO and the converted output
 interface OutputData {
     json: Step[]
+    classic: Array<BuildOrderBlock[]>
+    salt: Array<BuildOrderBlock>
+    needsUpdate: boolean
     fail?: FailureData
 }
 
 interface Settings {
-    autoFormat: boolean
     showJsonOutput: boolean
+    showMappings: boolean
+    convMode: ConversionMode
 }
 
 const log = create_logger("web")
 
 function App() {
 
-    // TEMP HERE
-    const testBO = `
-        13	  0:11	  Overlord	  
-        16	  0:47	  Hatchery	  
-        18	  1:08	  Extractor	  
-        17	  1:12	  Spawning Pool	  
-        21	  1:59	  Queen x2	  
-        21	  2:00	  Zergling x4	  
-        27	  2:08	  Metabolic Boost	  
-        27	  2:12	  Overlord	  
-        28	  2:27	  Hatchery	  
-        30	  2:43	  Queen	  
-        33	  2:48	  Overlord	  
-        36	  3:04	  Overlord	  
-        36	  3:11	  Overlord	  
-        41	  3:28	  Queen x2	  
-        41	  3:29	  Extractor	  
-        45	  3:39	  Baneling Nest	  
-        45	  3:44	  Zergling x4	  
-        49	  3:50	  Zergling x8	  
-        53	  3:58	  Zergling x4	  
-        70	  4:50	  Baneling x8	  
-        74	  4:57	  Baneling x2
-    `
-
     const [settings, setSettings] = useState<Settings>({
-        autoFormat: true,
-        showJsonOutput: true
+        showJsonOutput: true,
+        showMappings: true,
+        convMode: "CL->SALT"
     })
 
     const [input, setInput] = useState<InputData>({
-        userInput: "", formatted: [], needsFormat: false
+        userInput: "", fail: undefined
     })
+
     const [output, setOutput] = useState<OutputData>({
-        json: []
+        json: [], classic: [], salt: []
     })
 
     const handleClearInput = () => {
         setInput({
             ...input,
             userInput: "",
-            formatted: [],
-            needsFormat: false,
+            // needsUpdate: false,
             fail: undefined,
         })
-        setOutput({ json: [] })
+        setOutput({ json: [], classic: [], salt: [] })
     }
 
     const handleInputChange = (inputContent: string) => {
         // Ignore whitespace and other minor changes
-        const isFormatNeeded = (input.userInput).trim() !== (inputContent).trim()
+        const needsUpdate = (input.userInput).trim() !== (inputContent).trim()
         const clearErrors = inputContent === ""
-        log(clearErrors)
-        log(`Input change. Format: (${isFormatNeeded})`)
+        log(`Input change. Format: (${needsUpdate})`)
         setInput({
             ...input,
             userInput: inputContent,
-            needsFormat: isFormatNeeded,
             fail: clearErrors ? undefined : input.fail
         })
+        setOutput({ ...output, needsUpdate })
     }
 
     const handleFormat = () => {
-        const formatRes = fmt.format_classic_bo(input.userInput)
-        if ("reason" in formatRes && input.userInput) {
-            return setInput({ ...input, formatted: [], fail: formatRes, needsFormat: false })
+        const formatRes = (settings.convMode === "CL->SALT")
+            ? fmt.format_classic_bo(input.userInput)
+            : fmt.format_salt_bo(input.userInput)
+        if (is_err(formatRes) && input.userInput) {
+            return setInput({ ...input, fail: formatRes, needsUpdate: false })
         }
-        log(jstr(formatRes))
+        log("formatted: " + formatRes)
         setInput({
             ...input,
             fail: undefined, // Clear errors
-            formatted: formatRes,
-            needsFormat: false
         })
-
         genJson(formatRes)
     }
 
-    const genJson = (formattedBo: Array<string[]>) => {
-        console.log("[genJson] ", formattedBo)
-        if (!formattedBo) {
+    const genJson = (bo: string | Array<string>) => {
+        // console.log("[genJson] ", blocksBo)
+        if (!bo) {
             return setOutput({
                 ...output,
-                fail: { type: "warning", reason: "Cannot read formatted input. Check for typos" }
+                fail: { type: "warning", reason: "Cannot read blocks input. Check for typos" }
             })
         }
         try {
-            const lines = formattedBo.map((words: string[]) => words.join(" "))
-            console.log("[EXP] lines: ", lines)
-            const parseRes = parser.parse_classic_bo(lines)
+            const parseRes = (settings.convMode === "CL->SALT")
+                ? parser.parse_classic_bo(bo)
+                : parser.parse_salt_bo(bo)
             if (is_err(parseRes)) {
                 return setOutput({
                     ...output,
                     fail: parseRes
                 })
             }
+            // log("parseRes " + jstr(parseRes))
+            const classic = genClassicFromJSON(parseRes)
+            const salt = genSaltFromJSON(parseRes)
             setOutput({
                 ...output,
-                json: parseRes
+                json: parseRes,
+                classic,
+                salt,
+                needsUpdate: false
             })
-            console.log("[res] ", parseRes)
         } catch (err) {
             console.warn(err)
-            setOutput({ ...output, fail: { type: "error", reason: (err as Error).message } })
+            setOutput({ ...output, fail: { type: "error", reason: (err as Error).message }, needsUpdate: false })
         }
     }
 
-    const genOutput = () => {
+    const genClassicFromJSON = (steps: Step[]): Array<BuildOrderBlock[]> => {
+        if (!steps) return
+        return gen_classic_from_json(steps)
+    }
 
+    const genSaltFromJSON = (steps: Step[]): BuildOrderBlock[] => {
+        if (!steps) return
+        const s = new Salt()
+        return s.gen_salt_from_json(steps)
     }
 
     useEffect(() => {
-        if (!input.needsFormat) return
-        log(`Autoformatting: '${input.userInput.substring(0, 12)}'...`)
+        if (!output.needsUpdate) return
+        log("Formatting...")
         handleFormat()
-    }, [input])
+    }, [output])
+
+    useEffect(() => {
+        const handleBlockHover = (e: MouseEvent, action: "add" | "remove") => {
+            const target = e.target as HTMLElement
+            if (!target || target.tagName.toLowerCase() !== "span" || !target.id) return
+            document.querySelectorAll(`#${CSS.escape(target.id)}`).forEach((elem: Element) => {
+                if (action === "add") {
+                    elem.classList.add("bg-black")
+                    if (elem !== target && !isElementVisible(elem, target)) {
+                        elem.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }
+                } else {
+                    elem.classList.remove("bg-black")
+                }
+            })
+        }
+
+        document.addEventListener("mouseover", (e: MouseEvent) => handleBlockHover(e, "add"))
+        document.addEventListener("mouseout", (e: MouseEvent) => handleBlockHover(e, "remove"))
+        return () => {
+            document.removeEventListener("mouseover", (e) => handleBlockHover(e, "add"))
+            document.removeEventListener("mouseout", (e) => handleBlockHover(e, "remove"))
+        }
+
+    }, [])
 
     return (
         <Flex
@@ -187,24 +210,45 @@ function App() {
         >
 
             {/* Nav */}
-            <Flex direction={"column"} gap={1} px={3} pt={1}>
+            <Flex direction={"column"} gap={1} borderBottomWidth={1}>
                 {/* Main nav */}
-                <Flex direction={"row"} justify={"space-between"} >
-                    <Text>salt-explorer</Text>
+                <Flex direction={"row"} justify={"space-between"} mb={1} p={1} >
+                    <Text>sc2-salt-explorer</Text>
                     <Link>dgklhjdhsgfj</Link>
                 </Flex>
                 {/* Settings */}
-                <Flex w={"100%"} p={1} borderWidth={1} gap={3}>
+                <Flex w={"100%"} p={1} gap={3}>
                     <Flex justify="center" align="center">
-                        <Button onClick={() => handleInputChange(testBO)}>Load test BO</Button>
+                        <Button size={"sm"} onClick={() => handleInputChange(settings.convMode === "CL->SALT" ? sampleClassic : sampleSalt)}>
+                            Load sample BO
+                        </Button>
                     </Flex>
-                    <Flex justify="center" align="center">
-                        <Text>Auto formatting:&nbsp;</Text>
-                        <Switch defaultChecked={settings.autoFormat} onChange={() => setSettings({ ...settings, autoFormat: !settings.autoFormat })} />
+                    <Divider orientation='vertical' />
+                    <Flex gap={1} justify="center" align="center">
+                        <Text>{settings.convMode === "CL->SALT" ? "(CLASSIC) -> (SALT)" : "(SALT) -> (CLASSIC"}</Text>
+                        <Button size={"sm"} onClick={() => {
+                            const oppConv = settings.convMode === "CL->SALT" ? "SALT->CL" : "CL->SALT"
+                            setSettings({ ...settings, convMode: oppConv })
+                            setInput({ ...input, userInput: "" })
+                            setOutput({ ...output, json: [], classic: [], salt: [], needsUpdate: false })
+                        }}>
+                            Toggle
+                        </Button>
                     </Flex>
+                    <Divider orientation='vertical' />
                     <Flex justify="center" align="center">
                         <Text>Show JSON output:&nbsp;</Text>
-                        <Switch defaultChecked={settings.showJsonOutput} onChange={() => setSettings({ ...settings, showJsonOutput: !settings.showJsonOutput })} />
+                        <Switch
+                            defaultChecked={settings.showJsonOutput}
+                            onChange={() => setSettings({ ...settings, showJsonOutput: !settings.showJsonOutput })}
+                        />
+                    </Flex>
+                    <Flex justify="center" align="center">
+                        <Text>Show mappings</Text>
+                        <Switch
+                            defaultChecked={settings.showMappings}
+                            onChange={() => setSettings({ ...settings, showMappings: !settings.showMappings })}
+                        />
                     </Flex>
                 </Flex>
 
@@ -215,18 +259,20 @@ function App() {
                 {/* Left panel */}
                 <Flex direction={"column"} w={"50%"} grow={1} margin={4} justify={"space-between"} >
 
-                    <Accordion defaultIndex={[0, 1]} allowMultiple>
+                    <Accordion height={"100%"} defaultIndex={[0, 1]} allowMultiple>
                         {/* User input */}
                         <AccordionItem>
                             <h2>
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
-                                        <Text>Input</Text>
+                                        <Text>
+                                            Input ({settings.convMode === "CL->SALT" ? "CLASSIC" : "SALT"})
+                                        </Text>
                                     </Box>
                                     <AccordionIcon />
                                 </AccordionButton>
                             </h2>
-                            <AccordionPanel pb={4}>
+                            <AccordionPanel p={1}>
                                 <Stack spacing={2}>
                                     <InputGroup size='md'>
                                         <Input
@@ -244,7 +290,8 @@ function App() {
                                 </Stack>
                             </AccordionPanel>
                         </AccordionItem>
-                        {/* Formatted input */}
+
+                        {/* blocks input */}
                         <AccordionItem>
                             <h2>
                                 <AccordionButton>
@@ -254,19 +301,9 @@ function App() {
                                     <AccordionIcon />
                                 </AccordionButton>
                             </h2>
-                            {(input.formatted.length > 0) &&
-                                <AccordionPanel pb={4} maxH={"50vh"} overflowY={"auto"}>
-                                    <Flex direction={"column"} gap={1}>
-                                        {input.formatted.map((words: string[], idx: number) => (
-                                            <Flex direction={"row"} gap={1}>
-                                                {words.map((word: string, idx: number) => (
-                                                    <Box backgroundColor={propertyColorMap.get(propertyIdMap.get(idx))}>
-                                                        <Text p={1}>{word}</Text>
-                                                    </Box>
-                                                ))}
-                                            </Flex>
-                                        ))}
-                                    </Flex>
+                            {(output.classic.length > 0) &&
+                                <AccordionPanel pb={4} maxH={"50vh"} bg={"whiteAlpha.50"} overflowY={"auto"}>
+                                    <ClassicBO blocks={output.classic} />
                                 </AccordionPanel>
                             }
                         </AccordionItem>
@@ -286,26 +323,26 @@ function App() {
                         allowMultiple
                         index={[0, settings.showJsonOutput ? 1 : undefined]}
                     >
-                        {/* User input */}
+                        {/* Output - SALT Notation */}
                         <AccordionItem>
                             <h2>
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
-                                        <Text>Output (SALT)</Text>
+                                        <Text>
+                                            Output ({settings.convMode === "CL->SALT" ? "SALT" : "CLASSIC"})
+                                        </Text>
                                     </Box>
                                     <AccordionIcon />
                                 </AccordionButton>
                             </h2>
-                            {/* TEMP */}
-                            {(output.fail?.type === "akdhkjasd") &&
-                                <AccordionPanel pb={4} maxH={"50vh"} overflowY={"auto"}>
-                                    <UnorderedList>
-                                        {/* Stuff */}
-                                    </UnorderedList>
+                            {(output.salt.length > 0) &&
+                                <AccordionPanel bg={"whiteAlpha.50"} px={4} pb={4} maxH={"50vh"} overflowY={"auto"}>
+                                    <SaltBO blocks={output.salt} />
                                 </AccordionPanel>
                             }
                         </AccordionItem>
-                        {/* Formatted input */}
+
+                        {/* Output - JSON notation */}
                         <AccordionItem>
                             <h2>
                                 <AccordionButton>
@@ -315,21 +352,21 @@ function App() {
                                     <AccordionIcon />
                                 </AccordionButton>
                             </h2>
-                            {(output.json) &&
-                                <AccordionPanel pb={4} maxH={"50vh"} overflowY={"auto"}>
-                                    <Stack direction={"column"} gap={2}>
+                            {(output.json.length > 0) &&
+                                <AccordionPanel bg={"whiteAlpha.50"} maxH={"50vh"} overflowY={"auto"}>
+                                    <Stack direction={"column"} gap={1}>
                                         {output.json.map((step: Step, idx: number) => {
                                             return (
                                                 <Stack gap={1} direction='row' key={idx}>
-                                                    <Property name="bracket" value="" bracket="left" />
-                                                    <Property name="supply" value={step.supply.value} />
-                                                    <Property name="minutes" value={step.minutes.value} />
-                                                    <Property name="seconds" value={step.seconds.value} />
+                                                    <Property id="" name="bracket" value="" bracket="left" />
+                                                    <Property id={step.supply.map_id} name="supply" value={step.supply.value} />
+                                                    <Property id={step.minutes.map_id} name="minutes" value={step.minutes.value} />
+                                                    <Property id={step.seconds.map_id} name="seconds" value={step.seconds.value} />
                                                     {step.actions &&
-                                                        step.actions.map((action: StepActionBase, idx: number) => (
+                                                        step.actions.map((action: MappedValue<StepActionBase>, idx: number) => (
                                                             <Fragment key={idx}>
-                                                                <Code children={`"action": ${action.action}`} />
-                                                                <Code children={`"count": ${action.count}`} />
+                                                                <Property id={action.map_id} name="action" value={action.value.action} />
+                                                                <Property id={action.map_id} name="count" value={action.value.count} />
                                                             </Fragment>
                                                         ))
                                                     }
@@ -350,7 +387,7 @@ function App() {
 
             {/* Bottom panel (mappings) */}
             <Flex grow={1}>
-                <Accordion w={"100%"}>
+                <Accordion w={"100%"} defaultIndex={[0]}>
                     <AccordionItem>
                         <h2>
                             <AccordionButton>
@@ -360,9 +397,11 @@ function App() {
                                 <AccordionIcon />
                             </AccordionButton>
                         </h2>
-                        <AccordionPanel>
-                            {/* Mappings */}
-                        </AccordionPanel>
+                        {(output.classic.length > 0 && output.salt.length > 0 && settings.showMappings) &&
+                            <AccordionPanel overflowX={"auto"} bg={"whiteAlpha.50"}>
+                                <Mappings classic={output.classic} salt={output.salt} convMode={settings.convMode} />
+                            </AccordionPanel>
+                        }
                     </AccordionItem>
                 </Accordion>
             </Flex>
