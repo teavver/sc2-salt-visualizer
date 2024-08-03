@@ -1,4 +1,4 @@
-import { Flex, Tag, Card, CardBody, Code } from "@chakra-ui/react"
+import { Flex, Tag, Card, Code } from "@chakra-ui/react"
 import { FailureData } from "../../../salt/types"
 
 interface InfoData {
@@ -6,9 +6,14 @@ interface InfoData {
     reason: string
 }
 
+interface InfoCardStyles {
+    backgroundColor: string
+    colorScheme: string
+}
+
 export const InfoCard = (props: { data: InfoData | FailureData }) => {
 
-    const getStyles = (): object => {
+    const getStyles = (): InfoCardStyles => {
         let styles = {
             backgroundColor: "#2d3748",
             colorScheme: "gray"

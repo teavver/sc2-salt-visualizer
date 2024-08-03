@@ -1,19 +1,39 @@
 import { BuildOrderBlock } from "../../../salt/types"
-import { Flex, Box, Text } from "@chakra-ui/react"
+import { Table, Thead, Tbody, Tr, Th, Td, Box } from "@chakra-ui/react"
 import { propertyColorMap, propertyIdMap } from "./Property"
 
 export const ClassicBO = (props: { blocks: Array<BuildOrderBlock[]> }) => {
     return (
-        <Flex direction={"column"} gap={1}>
-            {props.blocks.map((blocks_arr: Array<BuildOrderBlock[]>, idx: number) => (
-                <Flex className="cursor-default" direction={"row"} gap={1} key={idx}>
-                    {blocks_arr.map((block: BuildOrderBlock, idx: number) => (
-                        <Box key={idx} backgroundColor={propertyColorMap.get(propertyIdMap.get(idx))}>
-                            <span id={block.id} className="p-1">{block.content}</span>
-                        </Box>
-                    ))}
-                </Flex>
-            ))}
-        </Flex>
+        <Table variant="simple" size="md">
+            <Thead>
+                <Tr>
+                    <Th py={1} px={0} w="60px">Supply</Th>
+                    <Th py={1} px={0} w="34px">Min</Th>
+                    <Th py={1} px={0} w="34px">Sec</Th>
+                    <Th py={1} px={0}>Action</Th>
+                </Tr>
+            </Thead>
+            <Tbody>
+                {props.blocks.map((blocks_arr: BuildOrderBlock[], rowIdx: number) => (
+                    <Tr key={rowIdx} className="cursor-default" p={0}>
+                        {['supply', 'minutes', 'seconds', 'action'].map((_, colIdx) => (
+                            <Td key={colIdx} whiteSpace="nowrap" p={0}>
+                                <Box
+                                    backgroundColor={propertyColorMap.get(propertyIdMap.get(colIdx) || "")}
+                                    display="inline-block" py={0.5} my={1}
+                                >
+                                    <span
+                                        id={blocks_arr[colIdx]?.id}
+                                        className="p-1 select-none whitespace-nowrap text-base"
+                                    >
+                                        {blocks_arr[colIdx]?.content || ''}
+                                    </span>
+                                </Box>
+                            </Td>
+                        ))}
+                    </Tr>
+                ))}
+            </Tbody>
+        </Table>
     )
 }

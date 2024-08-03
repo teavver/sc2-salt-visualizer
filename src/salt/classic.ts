@@ -1,17 +1,18 @@
 import { StepAction, StepActionBase, BuildOrderBlock, Step, BuildOrderBlockId, MappingId } from "./types.js"
-import { create_logger, jstr, to_decimal } from "./utils.js"
+import { create_logger, to_decimal } from "./utils.js"
 
 /**
  * Classic BO Functions
  */
 
-const log = create_logger("classic")
+const log = create_logger("classic", true)
 
 /**
  * Extracts actions from an action string
- * TODO: Handle comments, with and without "@" prefix
+ * TODO: Handle comments: Wrapped in parenthesis, e.g. "Phoenix (Chrono Boost)" or prefixed with "@", e.g. "Phoenix @Natural"
  */
 export const extract_actions = (action_str: string, line_idx: number): StepAction => {
+    log(`action str: '${action_str}'`)
     let res: StepAction = { actions: [] }
     if (action_str === "") {
         res.fails = { type: "error", reason: "Empty action string" }
@@ -22,15 +23,16 @@ export const extract_actions = (action_str: string, line_idx: number): StepActio
     // "Zerglingx2" <= This will be ignored and treated as a single action
     const repeat_count_expr = /\bx(\d+)\b/
     const actions = action_str.split(",")
-    // console.log(`actions: `, actions)
-    actions.forEach((action: string, idx: number) => {
+    for (let i = 0; i < actions.length; i++) {
+        const action = actions[i]
         let base_action: StepActionBase = { action: "", count: 1 }
-        const map_id: MappingId = `${line_idx}${idx + BuildOrderBlockId.ACTION}`
+        const map_id: MappingId = `${line_idx}${i + BuildOrderBlockId.ACTION}`
         if (action.length === 0) {
             res.fails = { type: "warning", reason: "Action is empty. Did you missclick a comma?" }
         }
         // Handle count, e.g. "Zergling x4"
         const matches = action.match(repeat_count_expr)
+        log(`matches: ${matches}`)
         if (!matches || !matches.index) {
             base_action.action = action
         } else {
@@ -40,7 +42,7 @@ export const extract_actions = (action_str: string, line_idx: number): StepActio
             base_action.action = action.substring(0, matches.index - 1)
         }
         res.actions.push({ value: base_action, map_id })
-    })
+    }
     return res
 }
 

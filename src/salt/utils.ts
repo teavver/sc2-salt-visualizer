@@ -1,4 +1,5 @@
 import { BuildOrderBlockId, FailureData } from "./types.js"
+import { ENV, Env } from "../environment.js"
 
 export const to_decimal = (str: string) => parseInt(str, 10)
 export const jstr = (json: object) => JSON.stringify(json, null, 4)
@@ -7,10 +8,10 @@ export const halt_unexpected_err = (err: unknown): FailureData => {
 }
 export const gen_map_id = (line_idx: number, block_id: BuildOrderBlockId) => `${line_idx}${block_id}`
 
-export const is_err = (data: unknown) => {
-    if (typeof data !== "object") return false
-    const obj = data as object
-    return ("reason" in obj)
+export function is_err(data: unknown): data is FailureData {
+    if (typeof data !== "object" || data === null) return false
+    return "reason" in data && "type" in data &&
+        (data as any).type === "warning" || (data as any).type === "error"
 }
 
 export const format_err = (err: unknown) => {
@@ -24,8 +25,9 @@ export const format_err = (err: unknown) => {
     console.log("======")
 }
 
-export const create_logger = (module: string) => {
+export const create_logger = (module: string, debug?: true) => {
     return (msg: string, special?: "warn" | "error") => {
+        if (debug && ENV !== Env.DEBUG) return
         if (!special) {
             console.log(`[${module}]: ${msg}`)
         } else {

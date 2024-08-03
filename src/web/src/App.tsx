@@ -2,21 +2,14 @@ import * as parser from "../../salt/parser";
 import * as fmt from "../../salt/fmt";
 import { is_err } from "../../salt/utils";
 import { Mappings } from "./components/Mappings";
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, Fragment, useRef } from 'react';
 import {
     Box,
-    Card,
-    CardBody,
-    Code,
     Button,
-    Container,
     Flex,
-    Heading,
+    Text,
     Input,
     Stack,
-    StepTitle,
-    Text,
-    Textarea,
     Accordion,
     AccordionButton,
     AccordionPanel,
@@ -24,19 +17,15 @@ import {
     AccordionIcon,
     InputGroup,
     InputRightElement,
-    List,
     Divider,
-    UnorderedList,
-    ListItem,
-    Badge,
     Link,
-    Select,
-    Switch
+    Switch,
+    Heading
 } from '@chakra-ui/react';
 import { FailureData, MappedValue, Step, StepActionBase, BuildOrderBlock } from "../../salt/types";
-import { create_logger, jstr } from "../../salt/utils";
+import { create_logger } from "../../salt/utils";
 import { InfoCard } from "./components/FailCard";
-import { Property, propertyColorMap, propertyIdMap } from "./components/Property";
+import { Property } from "./components/Property";
 import { ClassicBO } from "./components/ClassicBO";
 import { gen_classic_from_json } from "../../salt/classic";
 import { isElementVisible } from "./utils/utils";
@@ -44,11 +33,14 @@ import { Salt } from "../../salt/salt";
 import { SaltBO } from "./components/SaltBO";
 import { sampleClassic, sampleSalt } from "./utils/samples";
 
-// Yes, I do prefer this over a boolean.
-export type ConversionMode = "CL->SALT" | "SALT->CL"
+export enum ConversionMode {
+    CLASSIC_TO_SALT = 0,
+    SALT_TO_CLASSIC = 1,
+}
 
 interface InputData {
     userInput: string
+    needsUpdate: boolean
     fail?: FailureData
 }
 
@@ -57,7 +49,6 @@ interface OutputData {
     json: Step[]
     classic: Array<BuildOrderBlock[]>
     salt: Array<BuildOrderBlock>
-    needsUpdate: boolean
     fail?: FailureData
 }
 
@@ -65,6 +56,7 @@ interface Settings {
     showJsonOutput: boolean
     showMappings: boolean
     convMode: ConversionMode
+    scrollSync: boolean
 }
 
 const log = create_logger("web")
@@ -74,13 +66,14 @@ function App() {
     const [settings, setSettings] = useState<Settings>({
         showJsonOutput: true,
         showMappings: true,
-        convMode: "CL->SALT"
+        convMode: ConversionMode.SALT_TO_CLASSIC,
+        scrollSync: true,
     })
+    const scrollSyncRef = useRef(settings.scrollSync)
 
     const [input, setInput] = useState<InputData>({
-        userInput: "", fail: undefined
+        userInput: "", fail: undefined, needsUpdate: false
     })
-
     const [output, setOutput] = useState<OutputData>({
         json: [], classic: [], salt: []
     })
@@ -103,28 +96,24 @@ function App() {
         setInput({
             ...input,
             userInput: inputContent,
+            needsUpdate: needsUpdate,
             fail: clearErrors ? undefined : input.fail
         })
-        setOutput({ ...output, needsUpdate })
+        setOutput({ ...output })
     }
 
     const handleFormat = () => {
-        const formatRes = (settings.convMode === "CL->SALT")
+        const formatRes = (settings.convMode === ConversionMode.CLASSIC_TO_SALT)
             ? fmt.format_classic_bo(input.userInput)
             : fmt.format_salt_bo(input.userInput)
         if (is_err(formatRes) && input.userInput) {
             return setInput({ ...input, fail: formatRes, needsUpdate: false })
         }
         log("formatted: " + formatRes)
-        setInput({
-            ...input,
-            fail: undefined, // Clear errors
-        })
-        genJson(formatRes)
+        genJson(formatRes as (string | string[]))
     }
 
     const genJson = (bo: string | Array<string>) => {
-        // console.log("[genJson] ", blocksBo)
         if (!bo) {
             return setOutput({
                 ...output,
@@ -132,47 +121,53 @@ function App() {
             })
         }
         try {
-            const parseRes = (settings.convMode === "CL->SALT")
-                ? parser.parse_classic_bo(bo)
-                : parser.parse_salt_bo(bo)
+            const parseRes = (settings.convMode === ConversionMode.CLASSIC_TO_SALT)
+                ? parser.parse_classic_bo(bo as string[])
+                : parser.parse_salt_bo(bo as string)
+
+            console.log('parseRes ', parseRes)
             if (is_err(parseRes)) {
                 return setOutput({
                     ...output,
                     fail: parseRes
                 })
             }
-            // log("parseRes " + jstr(parseRes))
-            const classic = genClassicFromJSON(parseRes)
-            const salt = genSaltFromJSON(parseRes)
             setOutput({
                 ...output,
                 json: parseRes,
-                classic,
-                salt,
-                needsUpdate: false
+                classic: genClassicFromJSON(parseRes),
+                salt: genSaltFromJSON(parseRes),
             })
         } catch (err) {
-            console.warn(err)
-            setOutput({ ...output, fail: { type: "error", reason: (err as Error).message }, needsUpdate: false })
+            console.error(err)
+            setOutput({
+                ...output,
+                json: [], classic: [], salt: [],
+                fail: { type: "error", reason: (err as Error).message }
+            })
         }
     }
 
     const genClassicFromJSON = (steps: Step[]): Array<BuildOrderBlock[]> => {
-        if (!steps) return
+        if (!steps) return []
         return gen_classic_from_json(steps)
     }
 
     const genSaltFromJSON = (steps: Step[]): BuildOrderBlock[] => {
-        if (!steps) return
+        if (!steps) return []
         const s = new Salt()
         return s.gen_salt_from_json(steps)
     }
 
     useEffect(() => {
-        if (!output.needsUpdate) return
+        if (!input.userInput || !input.needsUpdate) return
         log("Formatting...")
         handleFormat()
-    }, [output])
+    }, [input])
+
+    useEffect(() => {
+        scrollSyncRef.current = settings.scrollSync
+    }, [settings.scrollSync])
 
     useEffect(() => {
         const handleBlockHover = (e: MouseEvent, action: "add" | "remove") => {
@@ -180,23 +175,26 @@ function App() {
             if (!target || target.tagName.toLowerCase() !== "span" || !target.id) return
             document.querySelectorAll(`#${CSS.escape(target.id)}`).forEach((elem: Element) => {
                 if (action === "add") {
-                    elem.classList.add("bg-black")
-                    if (elem !== target && !isElementVisible(elem, target)) {
+                    elem.classList.add("bg-black", "text-white")
+                    // handle scrollsync
+                    if (scrollSyncRef.current && elem !== target && !isElementVisible(elem, target)) {
                         elem.scrollIntoView({ behavior: 'smooth', block: 'center' })
                     }
                 } else {
-                    elem.classList.remove("bg-black")
+                    elem.classList.remove("bg-black", "text-white")
                 }
             })
         }
 
-        document.addEventListener("mouseover", (e: MouseEvent) => handleBlockHover(e, "add"))
-        document.addEventListener("mouseout", (e: MouseEvent) => handleBlockHover(e, "remove"))
-        return () => {
-            document.removeEventListener("mouseover", (e) => handleBlockHover(e, "add"))
-            document.removeEventListener("mouseout", (e) => handleBlockHover(e, "remove"))
-        }
+        const handleMouseOver = (e: MouseEvent) => handleBlockHover(e, "add")
+        const handleMouseOut = (e: MouseEvent) => handleBlockHover(e, "remove")
 
+        document.addEventListener("mouseover", handleMouseOver)
+        document.addEventListener("mouseout", handleMouseOut)
+        return () => {
+            document.removeEventListener("mouseover", handleMouseOver)
+            document.removeEventListener("mouseout", handleMouseOut)
+        }
     }, [])
 
     return (
@@ -213,41 +211,61 @@ function App() {
             <Flex direction={"column"} gap={1} borderBottomWidth={1}>
                 {/* Main nav */}
                 <Flex direction={"row"} justify={"space-between"} mb={1} p={1} >
-                    <Text>sc2-salt-explorer</Text>
-                    <Link>dgklhjdhsgfj</Link>
+                    <Heading>sc2-salt-visualizer</Heading>
+                    <Link href='https://github.com/teavver/sc2-salt-visualizer'>gh</Link>
                 </Flex>
                 {/* Settings */}
                 <Flex w={"100%"} p={1} gap={3}>
                     <Flex justify="center" align="center">
-                        <Button size={"sm"} onClick={() => handleInputChange(settings.convMode === "CL->SALT" ? sampleClassic : sampleSalt)}>
-                            Load sample BO
+                        <Button size={"sm"} onClick={() => {
+                            handleInputChange(settings.convMode === ConversionMode.CLASSIC_TO_SALT
+                                ? sampleClassic
+                                : sampleSalt)
+                        }}>
+                            Load sample build order
                         </Button>
                     </Flex>
                     <Divider orientation='vertical' />
                     <Flex gap={1} justify="center" align="center">
-                        <Text>{settings.convMode === "CL->SALT" ? "(CLASSIC) -> (SALT)" : "(SALT) -> (CLASSIC"}</Text>
+                        <Text>Convert:
+                            <span className="ml-3 p-1 font-semibold">
+                                {settings.convMode === ConversionMode.CLASSIC_TO_SALT
+                                    ? "CLASSIC --> SALT"
+                                    : "SALT --> CLASSIC".toString()}
+                            </span>
+                        </Text>
                         <Button size={"sm"} onClick={() => {
-                            const oppConv = settings.convMode === "CL->SALT" ? "SALT->CL" : "CL->SALT"
+                            const oppConv = settings.convMode === ConversionMode.CLASSIC_TO_SALT
+                                ? ConversionMode.SALT_TO_CLASSIC : ConversionMode.CLASSIC_TO_SALT
                             setSettings({ ...settings, convMode: oppConv })
                             setInput({ ...input, userInput: "" })
-                            setOutput({ ...output, json: [], classic: [], salt: [], needsUpdate: false })
+                            setOutput({ ...output, json: [], classic: [], salt: [] })
                         }}>
                             Toggle
                         </Button>
                     </Flex>
                     <Divider orientation='vertical' />
                     <Flex justify="center" align="center">
-                        <Text>Show JSON output:&nbsp;</Text>
+                        <Text>Show JSON output&nbsp;</Text>
                         <Switch
                             defaultChecked={settings.showJsonOutput}
                             onChange={() => setSettings({ ...settings, showJsonOutput: !settings.showJsonOutput })}
                         />
                     </Flex>
+                    <Divider orientation='vertical' />
                     <Flex justify="center" align="center">
-                        <Text>Show mappings</Text>
+                        <Text>Show Mappings&nbsp;</Text>
                         <Switch
                             defaultChecked={settings.showMappings}
                             onChange={() => setSettings({ ...settings, showMappings: !settings.showMappings })}
+                        />
+                    </Flex>
+                    <Divider orientation='vertical' />
+                    <Flex justify="center" align="center">
+                        <Text>ScrollSync&nbsp;</Text>
+                        <Switch
+                            defaultChecked={settings.scrollSync}
+                            onChange={() => setSettings({ ...settings, scrollSync: !settings.scrollSync })}
                         />
                     </Flex>
                 </Flex>
@@ -266,7 +284,7 @@ function App() {
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
                                         <Text>
-                                            Input ({settings.convMode === "CL->SALT" ? "CLASSIC" : "SALT"})
+                                            Input ({settings.convMode === ConversionMode.CLASSIC_TO_SALT ? "CLASSIC" : "SALT"})
                                         </Text>
                                     </Box>
                                     <AccordionIcon />
@@ -296,7 +314,7 @@ function App() {
                             <h2>
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
-                                        <Text>Formatted input</Text>
+                                        <Text>Classic Output</Text>
                                     </Box>
                                     <AccordionIcon />
                                 </AccordionButton>
@@ -321,7 +339,7 @@ function App() {
                     <Accordion
                         defaultIndex={[0, 1]}
                         allowMultiple
-                        index={[0, settings.showJsonOutput ? 1 : undefined]}
+                        index={[0, settings.showJsonOutput ? 1 : 0]}
                     >
                         {/* Output - SALT Notation */}
                         <AccordionItem>
@@ -329,7 +347,7 @@ function App() {
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
                                         <Text>
-                                            Output ({settings.convMode === "CL->SALT" ? "SALT" : "CLASSIC"})
+                                            SALT Output
                                         </Text>
                                     </Box>
                                     <AccordionIcon />
@@ -347,31 +365,40 @@ function App() {
                             <h2>
                                 <AccordionButton>
                                     <Box as='span' flex='1' textAlign='left'>
-                                        <Text>Output (JSON)</Text>
+                                        <Text>JSON Output</Text>
                                     </Box>
                                     <AccordionIcon />
                                 </AccordionButton>
                             </h2>
                             {(output.json.length > 0) &&
                                 <AccordionPanel bg={"whiteAlpha.50"} maxH={"50vh"} overflowY={"auto"}>
-                                    <Stack direction={"column"} gap={1}>
+                                    <Stack direction={"column"} gap={2}>
                                         {output.json.map((step: Step, idx: number) => {
                                             return (
-                                                <Stack gap={1} direction='row' key={idx}>
-                                                    <Property id="" name="bracket" value="" bracket="left" />
-                                                    <Property id={step.supply.map_id} name="supply" value={step.supply.value} />
-                                                    <Property id={step.minutes.map_id} name="minutes" value={step.minutes.value} />
-                                                    <Property id={step.seconds.map_id} name="seconds" value={step.seconds.value} />
-                                                    {step.actions &&
-                                                        step.actions.map((action: MappedValue<StepActionBase>, idx: number) => (
-                                                            <Fragment key={idx}>
-                                                                <Property id={action.map_id} name="action" value={action.value.action} />
-                                                                <Property id={action.map_id} name="count" value={action.value.count} />
-                                                            </Fragment>
-                                                        ))
-                                                    }
-                                                    <Property name="bracket" value="" bracket="right" />
-                                                </Stack>
+                                                <Flex gap={1} direction={'column'} key={idx}>
+                                                    <Stack gap={1} direction='row'>
+                                                        <Property id="" name="bracket" value="" bracket="left" />
+                                                        <Property id={step.supply.map_id} name="supply" value={String(step.supply.value)} />
+                                                        <Property id={step.minutes.map_id} name="minutes" value={String(step.minutes.value)} />
+                                                        <Property id={step.seconds.map_id} name="seconds" value={String(step.seconds.value)} />
+                                                        {step.actions &&
+                                                            step.actions.map((action: MappedValue<StepActionBase>, idx: number) => (
+                                                                <Fragment key={idx}>
+                                                                    <Property id={action.map_id} name="action" value={action.value.action} />
+                                                                    <Property id={action.map_id} name="count" value={String(action.value.count)} />
+                                                                </Fragment>
+                                                            ))
+                                                        }
+                                                        <Property id="" name="bracket" value="" bracket="right" />
+                                                    </Stack>
+                                                    {step.fails && (
+                                                        Array.isArray(step.fails)
+                                                            ? step.fails.map((fail: FailureData, idx: number) => (
+                                                                <InfoCard data={fail} key={idx} />
+                                                            ))
+                                                            : <InfoCard data={step.fails} />
+                                                    )}
+                                                </Flex>
                                             )
                                         })}
                                     </Stack>
@@ -398,15 +425,13 @@ function App() {
                             </AccordionButton>
                         </h2>
                         {(output.classic.length > 0 && output.salt.length > 0 && settings.showMappings) &&
-                            <AccordionPanel overflowX={"auto"} bg={"whiteAlpha.50"}>
+                            <AccordionPanel bg={"whiteAlpha.50"} px={4} pb={4} w={"100%"} overflowX={"auto"}>
                                 <Mappings classic={output.classic} salt={output.salt} convMode={settings.convMode} />
                             </AccordionPanel>
                         }
                     </AccordionItem>
                 </Accordion>
             </Flex>
-
-
         </Flex >
     )
 }

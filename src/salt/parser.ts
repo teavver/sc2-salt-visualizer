@@ -3,7 +3,7 @@ import { create_logger, format_err, to_decimal, is_err, halt_unexpected_err, gen
 import { extract_actions } from "./classic.js"
 import { FailureData, Step, StepBase, BuildOrderBlockId } from "./types.js"
 
-const log = create_logger("parser")
+const log = create_logger("parser", true)
 
 /**
  * *This function assumes a formatted input (fmt.format_classic_bo)*
@@ -45,6 +45,7 @@ export const parse_classic_bo = (bo: string[]): Step[] | FailureData => {
         })
         // Fixes BO order, but messes up mappings (ids).
         // return steps.sort((a, b) => `${a.minutes.value}${a.seconds.value}`.localeCompare(`${b.minutes.value}${b.seconds.value}`))
+        // solution: store mappings in sep. obj. and ref w/ id prop
         return steps
     } catch (err) {
         format_err(err)
@@ -56,24 +57,25 @@ export const parse_classic_bo = (bo: string[]): Step[] | FailureData => {
  * This function assumes a formatted input (fmt.format_salt_bo)
  * 
  * Parses user-input SALT BO to JSON-notation
+ * 
+ * [Supply][Minutes][Seconds][Type][Item Id]]
+ * 
  */
 export const parse_salt_bo = (bo: string): Step[] | FailureData => {
     try {
         const salt = new Salt()
         const title = salt.get_bo_title(bo)
-        if (is_err(title)) return title as FailureData
+        if (is_err(title)) return title
         const ver = salt.get_bo_version(bo)
-        if (is_err(ver)) return ver as FailureData
+        if (is_err(ver)) return ver
         const bo_content = salt.get_bo_content(bo)
-        if (is_err(bo_content)) return bo_content as FailureData
-
+        if (is_err(bo_content)) return bo_content
         log(`salt ver "${ver}"`)
         log(`title "${title}"`)
-        log(`bo "${bo_content}"`)
-
-        const chunk_res = salt.get_bo_chunks(bo_content as string)
-        if (is_err(chunk_res)) return chunk_res as FailureData
-        return (chunk_res as string[]).map((chunk, idx) => salt.decode_chunk(chunk, idx))
+        log(`bo "${bo_content}", length: ${bo_content.length}`)
+        const chunk_res = salt.get_bo_chunks(bo_content)
+        if (is_err(chunk_res)) return chunk_res
+        return (chunk_res).map((chunk, idx) => salt.decode_chunk(chunk, idx))
     } catch (err) {
         format_err(err)
         return halt_unexpected_err(err)

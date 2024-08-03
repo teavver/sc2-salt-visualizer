@@ -11,7 +11,9 @@
 <space> - 0
 ! - 1
 " - 2
+
 # - 3
+
 $ - 4
 % - 5
 & - 6
@@ -19,8 +21,10 @@ $ - 4
 ( - 8
 ) - 9
 * - 10
+
 + - 11
 , - 12
+
 - - 13
 . - 14
 / - 15
@@ -38,7 +42,8 @@ $ - 4
 ; - 27
 < - 28
 = - 29
-> - 30
+>
+> * 30
 ? - 31
 @ - 32
 A - 33
@@ -105,17 +110,23 @@ z - 90
 ~ - 94
 
 # SECTIONS
+
 1. TITLE SECTION: [version][title string][~]
-2. BO SECTION: [supply][minutes][seconds][percentage][type][item id]
+2. BO SECTION: [supply][minutes][seconds][percentage*][type][item id]
+
+*Never implemented? (salt v4)
 
 # TYPES [type]
+
 structure = 0
 unit = 1
 morph = 2
 upgrade = 3
 
 # ITEM ID
+
 ### STRUCTURES (TYPE 0)
+
 00 Armory
 01 Barracks
 02 Bunker
@@ -164,6 +175,7 @@ upgrade = 3
 45 Ultralisk Cavern
 
 ### UNITS (TYPE 1)
+
 00 Banshee
 40 Battle Hellion
 01 Battlecruiser
@@ -212,6 +224,7 @@ upgrade = 3
 35 Zergling
 
 ### MORPHS (TYPE 2)
+
 00 Orbital Command
 01 Planetary Fortress
 02 Warp Gate
@@ -223,6 +236,7 @@ upgrade = 3
 08 Overseer
 
 ### UPGRADES (TYPE 3)
+
 00 Terran Building Armor
 01 Terran Infantry Armor
 02 Terran Infantry Weapons
@@ -291,4 +305,3 @@ upgrade = 3
 63 Ultralisk - Evolve Burrow Charge
 64 Swarm Host - Evolve Enduring Locusts
 65 Hydralisk - Muscular Augments
-

@@ -6,8 +6,7 @@
   "type": "module",
   "license": "MIT",
   "scripts": {
-    "parse": "cd src/salt && tsc && node dist/parser.js",
-    "web": "DEBUG=1 cd src/web && yarn dev"
+    "web": "cd src/web && yarn dev"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

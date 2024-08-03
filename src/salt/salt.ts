@@ -1,5 +1,8 @@
 import { BuildOrderBlock, BuildOrderBlockId, FailureData, MappedValue, Step, StepActionBase } from "./types.js"
-import { find_map_value, format_err, gen_map_id, salt_symbol_from_val } from "./utils.js"
+import { format_err, gen_map_id, jstr, salt_symbol_from_val } from "./utils.js"
+import { create_logger } from "./utils.js"
+
+const log = create_logger("salt", true)
 
 export interface SaltMetadata {
     version: number
@@ -166,19 +169,20 @@ export class Salt {
 
     private readonly valid_bo_input = (bo: string): boolean => bo.length > 1
 
-    // private readonly get_char_mapping = (char_idx: SaltCharType): Mapping => {
-    //     return { id: 99, start: char_idx, end: char_idx }
-    // }
-
     private readonly resolve_type_item_id = (type: number, item_id: number, l_idx: number, v5: boolean = false): MappedValue<StepActionBase> | FailureData => {
+        log(`type val: (${type}), item_id val: (${String(item_id)})`)
         const type_group_map = this.action_type_map.get(type)
         if (!type_group_map) {
+            log("invalid type_val", "error")
             return { type: "error", reason: "(Resolve) Failed to find action type group" }
         }
-        const action = type_group_map.get(String(item_id))
+        const f_item_id = item_id < 10 ? `0${item_id}` : String(item_id)
+        const action = type_group_map.get(f_item_id)
         if (!action) {
+            log("invalid item_id_val", "error")
             return { type: "warning", reason: "(Resolve) No action found with this item_id" }
         }
+        log(`action: ${action}`)
         return { map_id: gen_map_id(l_idx, BuildOrderBlockId.ACTION), value: { action: action, count: 1 } }
     }
 
@@ -198,14 +202,15 @@ export class Salt {
             let action_type: string = this.ERR_CHAR
             let item_id: string = this.ERR_CHAR
             const categories = [this.structures, this.units, this.morphs, this.upgrades]
-            categories.forEach((category, idx) => {
+            for (let i = 0; i < categories.length; i++) {
+                const category = categories[i]
+                if (step.actions.length === 0) return
                 const res = salt_symbol_from_val(category, step.actions[0].value.action)
                 if (res) {
                     item_id = salt_symbol_from_val(this.symbol_map, +res[0])?.[0] || this.ERR_CHAR
-                    action_type = salt_symbol_from_val(this.symbol_map, idx)?.[0] || this.ERR_CHAR
+                    action_type = salt_symbol_from_val(this.symbol_map, i)?.[0] || this.ERR_CHAR
                 }
-            })
-
+            }
             res.push(
                 { id: g_map(l_idx, SaltCharType.SUPPLY), content: supply },
                 { id: g_map(l_idx, SaltCharType.MINUTES), content: minutes },
@@ -213,7 +218,6 @@ export class Salt {
                 { id: g_map(l_idx, SaltCharType.TYPE), content: action_type },
                 { id: g_map(l_idx, SaltCharType.TYPE), content: item_id },
             )
-
         })
         return res
     }
@@ -241,8 +245,8 @@ export class Salt {
     // Split SALT BO content into 5-char chunk array
     public get_bo_chunks = (bo: string): Array<string> | FailureData => {
         try {
-            if (bo.length < this.CHUNK_LENGTH || bo.length % this.CHUNK_LENGTH !== 0) {
-                return { type: "warning", reason: "SALT Chunk is incomplete or corrupted" }
+            if (bo.length < this.CHUNK_LENGTH) {
+                return { type: "warning", reason: `SALT Chunk is not of size (${this.CHUNK_LENGTH})` }
             }
             const res: Array<string> = []
             for (let i = 0; i < bo.length; i += this.CHUNK_LENGTH) {
@@ -257,21 +261,20 @@ export class Salt {
 
     // SALT v1-v4
     public decode_chunk = (chunk: string, l_idx: number): Step => {
-        let err: FailureData | undefined = undefined
-        if (!this.valid_bo_input(chunk)) err = { type: "error", reason: "Empty BO" }
-        if (chunk.length < this.CHUNK_LENGTH) err = { type: "error", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` }
+        const fails: FailureData[] = []
+        log(`chunk content: "${[chunk.split('').map((_, idx) => chunk.charAt(idx))]}", length: (${chunk.length})`)
+        if (!this.valid_bo_input(chunk)) fails.push({ type: "error", reason: "Empty BO" })
+        if (chunk.length < this.CHUNK_LENGTH) fails.push({ type: "warning", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` })
         const [supply, minutes, seconds, type, item_id] = Object.keys(SaltCharType).map((_, idx) => this.get_symbol_val(chunk.charAt(idx)))
-        // const minutes = this.get_symbol_val(chunk.charAt(SaltCharType.MINUTES))
-        // const seconds = this.get_symbol_val(chunk.charAt(SaltCharType.SECONDS))
-        // const action_type = this.get_symbol_val(chunk.charAt(SaltCharType.TYPE))
-        // const action_item_id = this.get_symbol_val(chunk.charAt(SaltCharType.ITEM_ID))
+        log(`chunk content (values): ${[supply, minutes, seconds, type, item_id]}, length: (${chunk.length})`)
         const action = this.resolve_type_item_id(type, item_id, l_idx)
-        if ("reason" in action) err = { type: action.type, reason: action.reason }
+        if ("reason" in action) fails.push({ type: action.type, reason: action.reason })
         return {
             supply: { map_id: gen_map_id(l_idx, BuildOrderBlockId.SUPPLY), value: supply + this.SUPPLY_SHIFT },
             minutes: { map_id: gen_map_id(l_idx, BuildOrderBlockId.MINUTES), value: minutes },
             seconds: { map_id: gen_map_id(l_idx, BuildOrderBlockId.MINUTES), value: seconds },
             actions: ("reason" in action) ? [] : [action],
+            fails,
         }
     }
 
