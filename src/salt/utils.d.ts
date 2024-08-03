@@ -1,0 +1,10 @@
+import { BuildOrderBlockId, FailureData } from "./types.js";
+export declare const to_decimal: (str: string) => number;
+export declare const jstr: (json: object) => string;
+export declare const halt_unexpected_err: (err: unknown) => FailureData;
+export declare const gen_map_id: (line_idx: number, block_id: BuildOrderBlockId) => string;
+export declare function is_err(data: unknown): data is FailureData;
+export declare const format_err: (err: unknown) => void;
+export declare const create_logger: (module: string, debug?: true) => (msg: string, special?: "warn" | "error") => void;
+export declare const salt_symbol_from_val: <K, V>(m: Map<K, V>, v: V) => [K, V] | null;
+export declare const find_map_value: <K, V>(m: Map<K, V>, predicate: (v: V) => boolean) => [K, V] | null;

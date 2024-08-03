@@ -27,7 +27,7 @@ export const format_err = (err: unknown) => {
 
 export const create_logger = (module: string, debug?: true) => {
     return (msg: string, special?: "warn" | "error") => {
-        if (debug && ENV !== Env.DEBUG) return
+        if (debug && +ENV !== Env.DEBUG) return
         if (!special) {
             console.log(`[${module}]: ${msg}`)
         } else {

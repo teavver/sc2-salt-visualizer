@@ -1,5 +1,5 @@
 import { BuildOrderBlock, BuildOrderBlockId, FailureData, MappedValue, Step, StepActionBase } from "./types.js"
-import { format_err, gen_map_id, jstr, salt_symbol_from_val } from "./utils.js"
+import { format_err, gen_map_id, salt_symbol_from_val } from "./utils.js"
 import { create_logger } from "./utils.js"
 
 const log = create_logger("salt", true)
@@ -169,7 +169,7 @@ export class Salt {
 
     private readonly valid_bo_input = (bo: string): boolean => bo.length > 1
 
-    private readonly resolve_type_item_id = (type: number, item_id: number, l_idx: number, v5: boolean = false): MappedValue<StepActionBase> | FailureData => {
+    private readonly resolve_type_item_id = (type: number, item_id: number, l_idx: number): MappedValue<StepActionBase> | FailureData => {
         log(`type val: (${type}), item_id val: (${String(item_id)})`)
         const type_group_map = this.action_type_map.get(type)
         if (!type_group_map) {

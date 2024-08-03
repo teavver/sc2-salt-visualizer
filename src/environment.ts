@@ -4,5 +4,5 @@ export enum Env {
     DEBUG = 1
 }
 
-export const ENV = Env.DEBUG
+export const ENV = Env.PROD
 console.log("ENV mode: ", ENV)
