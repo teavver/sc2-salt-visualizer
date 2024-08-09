@@ -36,7 +36,6 @@ export const extract_actions = (action_str: string, line_idx: number): StepActio
         if (!matches || !matches.index) {
             base_action.action = action
         } else {
-            // console.log(matches)
             base_action.count = to_decimal(matches[1])
             // No need to include the repeat count next to action
             base_action.action = action.substring(0, matches.index - 1)
@@ -60,7 +59,7 @@ export const gen_classic_from_json = (steps: Step[]): Array<BuildOrderBlock[]> =
             }
             return { id: `${line_idx}${action_idx + BuildOrderBlockId.ACTION}`, content: `${action.value.action}${count}` }
         })
-        // console.log([supply, minutes, seconds, ...actions])
+        log([supply, minutes, seconds, ...actions].toString())
         lines.push([supply, minutes, seconds, ...actions])
     })
     return lines

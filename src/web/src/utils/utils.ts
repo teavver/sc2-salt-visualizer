@@ -9,9 +9,9 @@ export const isElementVisible = (elem: Element, excludeElem: Element) => {
     let parent: Element | null = elem.parentElement
     while (parent) {
         if (parent === document.body) break
-        if (parent.scrollHeight > parent.clientHeight) {
+        if (parent.scrollWidth > parent.clientWidth || parent.scrollHeight > parent.clientHeight) {
             if (parent.contains(excludeElem)) {
-                return true // Skip scrolling if within the same container (super annoying)
+                return true // Skip scrolling if within the same container
             }
             const parentRect = parent.getBoundingClientRect()
             const elemRect = elem.getBoundingClientRect()

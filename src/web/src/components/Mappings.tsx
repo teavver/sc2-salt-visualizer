@@ -1,8 +1,9 @@
 import { Flex } from "@chakra-ui/react";
 import { BuildOrderBlock } from "../../../salt/types";
 import { ConversionMode } from "../App";
-import { propertyColorMap, propertyIdMap } from "./Property";
+import { propertyColorMap, propertyIdMap } from "../utils/property";
 import { gen_map_id } from "../../../salt/utils";
+import { Salt } from "../../../salt/salt";
 
 export const Mappings = (props: { classic: Array<BuildOrderBlock[]>, salt: Array<BuildOrderBlock>, convMode: ConversionMode }) => {
     const classicMap = props.classic.map((block_arr, line_idx) => {
@@ -13,8 +14,7 @@ export const Mappings = (props: { classic: Array<BuildOrderBlock[]>, salt: Array
     const mappings: BuildOrderBlock[] = []
     for (let i = 0; i < classicMap.length; i++) {
         for (let j = 0; j < classicMap[i].length; j++) {
-            const SALT_CHUNK_SIZE = 5 // Tidy this later
-            const salt = String((i * SALT_CHUNK_SIZE) + j)
+            const salt = String((i * Salt.CHUNK_LENGTH) + j)
             const cl = `${i}:${j}`
             if (props.convMode === ConversionMode.CLASSIC_TO_SALT) {
                 mappings.push({ id: gen_map_id(i, j), content: `${cl}->${salt}` })

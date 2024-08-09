@@ -1,16 +1,16 @@
 import { BuildOrderBlock } from "../../../salt/types"
 import { Table, Thead, Tbody, Tr, Th, Td, Box } from "@chakra-ui/react"
-import { propertyColorMap, propertyIdMap } from "./Property"
+import { propertyColorMap, propertyIdMap } from "../utils/property"
 
 export const ClassicBO = (props: { blocks: Array<BuildOrderBlock[]> }) => {
     return (
         <Table variant="simple" size="md">
             <Thead>
-                <Tr>
-                    <Th py={1} px={0} w="60px">Supply</Th>
-                    <Th py={1} px={0} w="34px">Min</Th>
-                    <Th py={1} px={0} w="34px">Sec</Th>
-                    <Th py={1} px={0}>Action</Th>
+                <Tr gap={2}>
+                    <Th fontSize={10} py={1} px={0} w="50px">Supply</Th>
+                    <Th fontSize={10} py={1} px={0} w="24px">Min</Th>
+                    <Th fontSize={10} py={1} px={0} w="32px">Sec</Th>
+                    <Th fontSize={10} py={1} px={0}>Action</Th>
                 </Tr>
             </Thead>
             <Tbody>
@@ -19,8 +19,7 @@ export const ClassicBO = (props: { blocks: Array<BuildOrderBlock[]> }) => {
                         {['supply', 'minutes', 'seconds', 'action'].map((_, colIdx) => (
                             <Td key={colIdx} whiteSpace="nowrap" p={0}>
                                 <Box
-                                    backgroundColor={propertyColorMap.get(propertyIdMap.get(colIdx) || "")}
-                                    display="inline-block" py={0.5} my={1}
+                                    backgroundColor={propertyColorMap.get(propertyIdMap.get(colIdx) || "")} my={1} w={"min-content"}
                                 >
                                     <span
                                         id={blocks_arr[colIdx]?.id}

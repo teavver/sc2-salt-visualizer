@@ -1,6 +1,6 @@
 import * as parser from "../../salt/parser";
 import * as fmt from "../../salt/fmt";
-import { is_err } from "../../salt/utils";
+import { is_err, jstr } from "../../salt/utils";
 import { Mappings } from "./components/Mappings";
 import { useState, useEffect, Fragment, useRef } from 'react';
 import {
@@ -82,7 +82,6 @@ function App() {
         setInput({
             ...input,
             userInput: "",
-            // needsUpdate: false,
             fail: undefined,
         })
         setOutput({ json: [], classic: [], salt: [] })
@@ -124,8 +123,7 @@ function App() {
             const parseRes = (settings.convMode === ConversionMode.CLASSIC_TO_SALT)
                 ? parser.parse_classic_bo(bo as string[])
                 : parser.parse_salt_bo(bo as string)
-
-            console.log('parseRes ', parseRes)
+            log(jstr(parseRes))
             if (is_err(parseRes)) {
                 return setOutput({
                     ...output,
@@ -173,22 +171,31 @@ function App() {
         const handleBlockHover = (e: MouseEvent, action: "add" | "remove") => {
             const target = e.target as HTMLElement
             if (!target || target.tagName.toLowerCase() !== "span" || !target.id) return
+    
+            const elementsToScroll: Element[] = []
             document.querySelectorAll(`#${CSS.escape(target.id)}`).forEach((elem: Element) => {
                 if (action === "add") {
                     elem.classList.add("bg-black", "text-white")
-                    // handle scrollsync
                     if (scrollSyncRef.current && elem !== target && !isElementVisible(elem, target)) {
-                        elem.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        elementsToScroll.push(elem)
                     }
                 } else {
                     elem.classList.remove("bg-black", "text-white")
                 }
             })
+    
+            if (elementsToScroll.length > 0) {
+                requestAnimationFrame(() => {
+                    for (let i = 0; i < elementsToScroll.length; i++) {
+                        elementsToScroll[i].scrollIntoView({behavior: "auto"})
+                    }
+                })
+            }
         }
-
+    
         const handleMouseOver = (e: MouseEvent) => handleBlockHover(e, "add")
         const handleMouseOut = (e: MouseEvent) => handleBlockHover(e, "remove")
-
+    
         document.addEventListener("mouseover", handleMouseOver)
         document.addEventListener("mouseout", handleMouseOut)
         return () => {

@@ -31,9 +31,10 @@ export class Salt {
     private readonly SECTION_DELIMITER: string = "~"
     // Supply amount is shifted to the left by (4)
     private readonly SUPPLY_SHIFT: number = 4
-    // [Supply][Minutes][Seconds][Type][Item Id]
-    private readonly CHUNK_LENGTH: number = 5
     private readonly ERR_CHAR: string = "❗"
+
+    // [Supply][Minutes][Seconds][Type][Item Id]
+    public static CHUNK_LENGTH: number = 5
 
     private readonly symbol_map = new Map([
         [" ", 0], ["!", 1], ["\"", 2], ["#", 3], ["$", 4],
@@ -245,12 +246,12 @@ export class Salt {
     // Split SALT BO content into 5-char chunk array
     public get_bo_chunks = (bo: string): Array<string> | FailureData => {
         try {
-            if (bo.length < this.CHUNK_LENGTH) {
-                return { type: "warning", reason: `SALT Chunk is not of size (${this.CHUNK_LENGTH})` }
+            if (bo.length < Salt.CHUNK_LENGTH) {
+                return { type: "warning", reason: `SALT Chunk is not of size (${Salt.CHUNK_LENGTH})` }
             }
             const res: Array<string> = []
-            for (let i = 0; i < bo.length; i += this.CHUNK_LENGTH) {
-                res.push(bo.slice(i, i + this.CHUNK_LENGTH))
+            for (let i = 0; i < bo.length; i += Salt.CHUNK_LENGTH) {
+                res.push(bo.slice(i, i + Salt.CHUNK_LENGTH))
             }
             return res
         } catch (err) {
@@ -264,7 +265,7 @@ export class Salt {
         const fails: FailureData[] = []
         log(`chunk content: "${[chunk.split('').map((_, idx) => chunk.charAt(idx))]}", length: (${chunk.length})`)
         if (!this.valid_bo_input(chunk)) fails.push({ type: "error", reason: "Empty BO" })
-        if (chunk.length < this.CHUNK_LENGTH) fails.push({ type: "warning", reason: `Chunk is not of length (${this.CHUNK_LENGTH})` })
+        if (chunk.length < Salt.CHUNK_LENGTH) fails.push({ type: "warning", reason: `Chunk is not of length (${Salt.CHUNK_LENGTH})` })
         const [supply, minutes, seconds, type, item_id] = Object.keys(SaltCharType).map((_, idx) => this.get_symbol_val(chunk.charAt(idx)))
         log(`chunk content (values): ${[supply, minutes, seconds, type, item_id]}, length: (${chunk.length})`)
         const action = this.resolve_type_item_id(type, item_id, l_idx)
