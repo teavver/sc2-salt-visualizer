@@ -187,7 +187,11 @@ function App() {
             if (elementsToScroll.length > 0) {
                 requestAnimationFrame(() => {
                     for (let i = 0; i < elementsToScroll.length; i++) {
-                        elementsToScroll[i].scrollIntoView({behavior: "auto"})
+                        elementsToScroll[i].scrollIntoView({
+                            behavior: "instant",
+                            block: "center",
+                            inline: "center",
+                        })
                     }
                 })
             }
